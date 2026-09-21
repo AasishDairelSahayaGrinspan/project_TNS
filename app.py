@@ -1,11 +1,9 @@
-"""Combined runner script to launch both FastAPI backends in background threads and present a multi-page unified Streamlit hub on Render."""
-import multiprocessing
+"""Combined runner script to launch both FastAPI backends in background subprocesses and present a multi-page unified Streamlit hub on Render."""
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
-
-import uvicorn
 
 ROOT_DIR = Path(__file__).resolve().parent
 CUSTOMER_DIR = ROOT_DIR / "customer-segmenter-app"
@@ -16,27 +14,23 @@ sys.path.insert(0, str(CUSTOMER_DIR))
 sys.path.insert(0, str(LOAN_DIR))
 
 
-def run_customer_backend():
-    os.chdir(CUSTOMER_DIR)
-    uvicorn.run("main_unsupervised:app", host="127.0.0.1", port=8000, log_level="error")
-
-
-def run_loan_backend():
-    os.chdir(LOAN_DIR)
-    uvicorn.run("main:app", host="127.0.0.1", port=8001, log_level="error")
-
-
 def start_backends():
-    p1 = multiprocessing.Process(target=run_customer_backend, daemon=True)
-    p2 = multiprocessing.Process(target=run_loan_backend, daemon=True)
-    p1.start()
-    p2.start()
-    time.sleep(2)  # Give backends time to start up
+    # Start Customer Segmenter backend on port 8000
+    subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "main_unsupervised:app", "--host", "127.0.0.1", "--port", "8000"],
+        cwd=str(CUSTOMER_DIR),
+    )
+    # Start Loan Approval backend on port 8001
+    subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8001"],
+        cwd=str(LOAN_DIR),
+    )
+    time.sleep(3)  # Give backends time to start up and bind ports
 
 
-# Start backends when script is loaded by Streamlit
-if "backends_started" not in os.environ:
-    os.environ["backends_started"] = "1"
+# Start backends once per container start
+if "BACKENDS_STARTED" not in os.environ:
+    os.environ["BACKENDS_STARTED"] = "1"
     start_backends()
 
 import streamlit as st
@@ -55,21 +49,19 @@ app_mode = st.sidebar.radio(
 )
 
 if app_mode == "Customer Segmenter (Unsupervised ML)":
-    # Set default backend URL to local port 8000
     os.environ["BACKEND_URL"] = "http://127.0.0.1:8000"
     os.chdir(CUSTOMER_DIR)
     
-    # Execute Customer Segmenter App
-    with open(CUSTOMER_DIR / "app_unsupervised.py") as f:
-        code = compile(f.read(), CUSTOMER_DIR / "app_unsupervised.py", "exec")
-        exec(code, {"__name__": "__main__"})
+    script_path = CUSTOMER_DIR / "app_unsupervised.py"
+    with open(script_path) as f:
+        code = compile(f.read(), str(script_path), "exec")
+        exec(code, {"__name__": "__main__", "__file__": str(script_path)})
 
 else:
-    # Set default backend URL to local port 8001
     os.environ["BACKEND_URL"] = "http://127.0.0.1:8001"
     os.chdir(LOAN_DIR)
     
-    # Execute Loan Approval App
-    with open(LOAN_DIR / "app.py") as f:
-        code = compile(f.read(), LOAN_DIR / "app.py", "exec")
-        exec(code, {"__name__": "__main__"})
+    script_path = LOAN_DIR / "app.py"
+    with open(script_path) as f:
+        code = compile(f.read(), str(script_path), "exec")
+        exec(code, {"__name__": "__main__", "__file__": str(script_path)})
