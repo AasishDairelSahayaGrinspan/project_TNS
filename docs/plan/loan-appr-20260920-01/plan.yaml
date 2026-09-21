@@ -1,0 +1,110 @@
+plan_id: loan-appr-20260920-01
+status: pending
+tldr: Build loan-approval-app with supervised predictor on reused loans.csv, FastAPI 8001 plus Streamlit 8502 Vanguard UI, verified end to end.
+created_at: '2026-09-20T00:00:00Z'
+created_by: gem-planner
+revision: 1
+replan_count: 0
+planner_revision_used: false
+baseline:
+  objective: Build loan-approval-app folder with supervised loan approval predictor (FastAPI + Streamlit) reusing /Users/dairel/Downloads/loans.csv, fresh Vanguard UI
+  acceptance_criteria:
+    - loan-approval-app folder with requirements.txt, dataset.py, train_model.py, main.py, app.py
+    - requirements includes fastapi, uvicorn, scikit-learn, pandas, numpy, streamlit, matplotlib, seaborn, requests, joblib
+    - loans.csv present with income, credit score, employment history + approval label, >100 rows (reuse Downloads/loans.csv if valid else synthetic)
+    - train_model.py scales, trains classifier, emits model.pkl + scaler.pkl, logs accuracy
+    - main.py GET /health + POST /predict applicant JSON returns approval JSON
+    - app.py Streamlit form sends to backend, displays approval visually with new dark purple sage serif luxury UI distinct from customer app
+    - pip install + dataset + train + backend/frontend startup verified
+  captured_at: '2026-09-20T00:00:00Z'
+decisions:
+  - Reuse /Users/dairel/Downloads/loans.csv as is; validated header income,credit_score,loan_amount,employment_years,loan_status with 1000 data rows, no synthetic fallback needed.
+  - Target folder is /Users/dairel/goofyProjects/project_TNS/loan-approval-app, strictly separate from customer-segmenter-app; no destructive changes outside new folder.
+  - Feature set is [income, credit_score, loan_amount, employment_years], label is loan_status (0/1); train_test_split test_size 0.2 random_state 42.
+  - Model is RandomForestClassifier random_state 42 with StandardScaler; artifacts are model.pkl and scaler.pkl in app folder root; accuracy printed/logged on train.
+  - Backend is FastAPI on port 8001 with GET /health and POST /predict accepting applicant JSON with the four features and returning approval JSON with prediction and probability.
+  - Frontend is Streamlit on port 8502 calling http://localhost:8001/predict; new layout variance of dark black purple plus sage serif luxury theme, distinct from customer app layout.
+  - Requirements pinned set: fastapi, uvicorn, scikit-learn, pandas, numpy, streamlit, matplotlib, seaborn, requests, joblib.
+assumptions:
+  - python3 and pip available in workdir /Users/dairel/goofyProjects/project_TNS; no virtualenv mandate.
+  - Ports 8001 and 8502 are free; if occupied worker reports evidence and does not reassign without orchestrator approval.
+  - No git repo operations required.
+tasks:
+  - id: loan-scaffold-dataset
+    title: Scaffold app folder and reuse dataset
+    description: 'Create loan-approval-app with requirements.txt and dataset.py plus loans.csv copy. reuse: existing file /Users/dairel/Downloads/loans.csv (validated 1000 rows) via stdlib shutil/pathlib copy; new: requirements.txt and dataset.py only.'
+    wave: 1
+    agent: gem-implementer
+    status: pending
+    retries_used: 0
+    acceptance_criteria:
+      - loan-approval-app/ exists with requirements.txt listing fastapi, uvicorn, scikit-learn, pandas, numpy, streamlit, matplotlib, seaborn, requests, joblib
+      - loan-approval-app/loans.csv byte-identical to source with header income,credit_score,loan_amount,employment_years,loan_status and >100 rows
+      - dataset.py loads loans.csv with pandas, exposes load_data and feature/label split, runs without error
+    handoff:
+      constraints:
+        - Only create inside loan-approval-app/; do not touch customer-segmenter-app/ or Downloads source
+        - requirements.txt must contain all ten packages named in baseline
+      relevant_context:
+        - source csv /Users/dairel/Downloads/loans.csv header income,credit_score,loan_amount,employment_years,loan_status
+        - workdir /Users/dairel/goofyProjects/project_TNS backend_port 8001 frontend_port 8502
+  - id: loan-train-pipeline
+    title: Author and run training pipeline
+    description: 'Author train_model.py using StandardScaler plus RandomForestClassifier random_state 42, run dataset plus train to emit artifacts. reuse: installed dependency scikit-learn/pandas/joblib; new: train_model.py only.'
+    wave: 2
+    depends_on:
+      - loan-scaffold-dataset
+    agent: gem-implementer
+    status: pending
+    retries_used: 0
+    acceptance_criteria:
+      - train_model.py scales features, trains classifier with train_test_split random_state 42, prints/logs accuracy
+      - model.pkl and scaler.pkl emitted in loan-approval-app/
+      - python dataset.py and python train_model.py both exit 0
+    handoff:
+      constraints:
+        - Features [income, credit_score, loan_amount, employment_years], label loan_status; do not change schema
+        - random_state 42 everywhere; artifacts co-located with train_model.py
+      relevant_context:
+        - loan-scaffold-dataset outputs requirements.txt dataset.py loans.csv paths
+  - id: loan-backend
+    title: Build FastAPI predict service on 8001
+    description: 'Author main.py with GET /health and POST /predict loading model.pkl/scaler.pkl. reuse: installed dependency fastapi plus uvicorn; new: main.py only.'
+    wave: 3
+    depends_on:
+      - loan-train-pipeline
+    agent: gem-implementer
+    status: pending
+    retries_used: 0
+    acceptance_criteria:
+      - main.py starts with uvicorn on port 8001, GET /health returns ok
+      - POST /predict accepts income, credit_score, loan_amount, employment_years JSON and returns approval JSON with prediction/probability
+      - Backend loads model.pkl/scaler.pkl from local folder, no hardcoded absolute user paths except localhost:8001
+    handoff:
+      constraints:
+        - Port 8001 only; do not use 8000/8501; resource ownership loan-approval-app/main.py
+        - Pydantic schema field names must exactly match training feature names
+      relevant_context:
+        - Artifact paths model.pkl scaler.pkl from loan-train-pipeline
+        - Workdir /Users/dairel/goofyProjects/project_TNS
+  - id: loan-frontend-verify
+    title: Build Streamlit UI on 8502 and verify end to end
+    description: 'Author app.py Streamlit form posting to localhost:8001 with fresh dark purple sage serif luxury layout distinct from customer app, then run pip install plus train plus startup checks. reuse: installed dependency streamlit/requests/matplotlib/seaborn; new: app.py layout variance only.'
+    wave: 3
+    depends_on:
+      - loan-train-pipeline
+      - loan-backend
+    agent: gem-implementer
+    status: pending
+    retries_used: 0
+    acceptance_criteria:
+      - app.py Streamlit form collects four applicant fields, posts to http://localhost:8001/predict, displays approval visually with new dark purple sage serif luxury styling distinct from customer app
+      - pip install -r requirements.txt succeeds, python dataset.py and python train_model.py succeed, backend /health and /predict verified, Streamlit 8502 startup verified
+      - All seven baseline acceptance items demonstrably met
+    handoff:
+      constraints:
+        - Port 8502 only; backend URL http://localhost:8001; resource ownership loan-approval-app/app.py
+        - No reuse of customer app layout verbatim; produce visibly different arrangement with same color language
+      relevant_context:
+        - Backend contract GET /health POST /predict from loan-backend
+        - Workdir /Users/dairel/goofyProjects/project_TNS

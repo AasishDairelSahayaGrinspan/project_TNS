@@ -1,0 +1,1 @@
+{"backend_pid": 9713, "backend_url": "http://localhost:8000", "frontend_pid": 9719, "frontend_url": "http://localhost:8501", "health": {"status": "ok"}, "predict_sample": {"annual_income": 50, "spending_score": 60, "response": {"cluster": 1, "persona": "Budget"}}}

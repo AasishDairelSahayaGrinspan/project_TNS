@@ -1,0 +1,14 @@
+{
+  "plan_id": "run-20260920-05",
+  "task_id": "R5-show-first",
+  "backend_pid": 10627,
+  "frontend_pid": 10633,
+  "backend_url": "http://127.0.0.1:8000",
+  "frontend_url": "http://127.0.0.1:8501",
+  "health": {"status": "ok"},
+  "predict": {"cluster": 2, "persona": "Standard"},
+  "frontend_root": 200,
+  "frontend_healthz": 200,
+  "hero_marker": "Know thy customer",
+  "dark_markers": 11
+}

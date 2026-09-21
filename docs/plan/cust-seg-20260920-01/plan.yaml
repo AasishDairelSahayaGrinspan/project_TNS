@@ -1,0 +1,141 @@
+plan_id: cust-seg-20260920-01
+status: pending
+tldr: |
+  Greenfield K-Means persona segmenter in customer-segmenter-app: reuse valid Downloads/customers.csv, train 3-cluster scaled model, expose FastAPI predictor on 8000, build Streamlit UI on 8501, verify install to startup.
+created_at: "2026-09-20T00:00:00Z"
+created_by: gem-planner
+revision: 1
+replan_count: 0
+planner_revision_used: false
+baseline:
+  objective: Build customer-segmenter-app folder with unsupervised K-Means persona segmenter (FastAPI backend + Streamlit frontend) per PROJECT 2 spec
+  acceptance_criteria:
+    - customer-segmenter-app folder created with requirements.txt, dataset_unsupervised.py, train_kmeans.py, main_unsupervised.py, app_unsupervised.py
+    - requirements.txt includes fastapi, uvicorn, scikit-learn, pandas, numpy, streamlit, matplotlib, seaborn, requests, joblib
+    - Dataset step produces customers.csv with annual income and spending score (reuse /Users/dairel/Downloads/customers.csv if valid, else synthetic generation)
+    - train_kmeans.py normalizes with StandardScaler, trains 3-cluster K-Means, maps centroids to marketing personas, exports .pkl artifacts
+    - main_unsupervised.py loads artifacts, exposes HTTP endpoint for cluster assignment returning persona JSON
+    - app_unsupervised.py renders Streamlit controls, calls backend, shows 2D scatter of new customer vs clusters
+    - Verified via pip install, dataset generation, training, and backend/frontend startup checks
+  captured_at: "2026-09-20T00:00:00Z"
+decisions:
+  - Reuse /Users/dairel/Downloads/customers.csv as source of truth; verified header annual_income_k,spending_score with 600 data rows on 2026-09-20
+  - Target root is /Users/dairel/goofyProjects/project_TNS/customer-segmenter-app; workdir was empty so greenfield scaffold with no conflicts
+  - Canonical input schema: annual_income_k float + spending_score float; backend request fields annual_income and spending_score mapped to same columns
+  - API contract fixed: POST /predict accepts JSON {annual_income: float, spending_score: float} returns {cluster: int, persona: string}; GET /health returns {status: ok}
+  - Model contract fixed: StandardScaler + KMeans n_clusters=3 random_state=42; artifacts kmeans.pkl, scaler.pkl, customers_clustered.csv colocated with train script; persona mapping derived by sorting centroids on income+score into Budget / Standard / Premium labels
+  - Ports fixed: backend 8000 via uvicorn main_unsupervised:app, frontend 8501 via streamlit run app_unsupervised.py with BACKEND_URL=http://localhost:8000
+assumptions:
+  - Python 3.10+ with pip available; no virtualenv manager mandated
+  - No git repo exists; workers must not init git or modify anything outside customer-segmenter-app except temp artifacts
+  - File code placeholders were empty so all 5 files are newly authored from spec, no hidden behavior to preserve
+  - matplotlib non-interactive Agg backend acceptable for Streamlit scatter
+tasks:
+  - id: T1-scaffold-dataset
+    title: Scaffold app folder and dataset pipeline
+    description: |
+      Create customer-segmenter-app with requirements.txt and dataset_unsupervised.py plus validated customers.csv. reuse: existing codebase helper none, reuse validated external CSV /Users/dairel/Downloads/customers.csv (header annual_income_k,spending_score, 600 rows) via copy-or-validate; new: requirements pin list and dataset script fallback path using stdlib + pandas/numpy synthetic generation only if validation fails.
+    wave: 1
+    agent: gem-implementer
+    status: pending
+    retries_used: 0
+    acceptance_criteria:
+      - customer-segmenter-app/requirements.txt exists with fastapi, uvicorn, scikit-learn, pandas, numpy, streamlit, matplotlib, seaborn, requests, joblib
+      - customer-segmenter-app/dataset_unsupervised.py validates copied CSV schema or generates synthetic income/score CSV on failure
+      - customer-segmenter-app/customers.csv exists with annual_income_k and spending_score columns and >100 rows
+      - python dataset_unsupervised.py exits 0 from app folder
+    handoff:
+      constraints:
+        - Do not touch anything outside /Users/dairel/goofyProjects/project_TNS/customer-segmenter-app
+        - Do not change CSV column names; downstream training depends on annual_income_k,spending_score
+        - requirements.txt must keep exact 10 packages listed in baseline
+      relevant_context:
+        - workdir /Users/dairel/goofyProjects/project_TNS was empty
+        - source CSV /Users/dairel/Downloads/customers.csv verified valid
+        - dataset script must be idempotent and log reused-vs-generated path
+  - id: T2-train-kmeans
+    title: Author and run K-Means training with personas
+    description: |
+      Author train_kmeans.py using installed dependency scikit-learn StandardScaler + KMeans(k=3). reuse: pandas/numpy/sklearn/matplotlib/seaborn installed deps; new: persona mapping by centroid sort and .pkl export logic only.
+    wave: 2
+    depends_on: [T1-scaffold-dataset]
+    agent: gem-implementer
+    status: pending
+    retries_used: 0
+    acceptance_criteria:
+      - train_kmeans.py uses StandardScaler, KMeans n_clusters=3 random_state=42, maps centroids to 3 marketing personas
+      - Running python train_kmeans.py exits 0 and emits kmeans.pkl, scaler.pkl, customers_clustered.csv
+      - Clustered CSV retains income/score plus cluster and persona columns
+      - Training logs cluster sizes and centroid persona mapping
+    handoff:
+      constraints:
+        - Read only customers.csv produced by T1; do not re-generate dataset
+        - Artifact filenames fixed: kmeans.pkl, scaler.pkl, customers_clustered.csv in app folder
+        - Backend contract depends on joblib load of these exact files
+      relevant_context:
+        - API predictor contract POST /predict {annual_income, spending_score} -> {cluster, persona}
+        - Persona labels Budget/Standard/Premium assigned by sorted centroid income+score
+  - id: T3-backend-api
+    title: Build FastAPI cluster assignment service
+    description: |
+      Author main_unsupervised.py with FastAPI loading scaler+kmeans via joblib. reuse: fastapi+uvicorn platform feature for HTTP, joblib for artifact load; new: /predict scaling+persona lookup handler and /health only.
+    wave: 3
+    depends_on: [T2-train-kmeans]
+    agent: gem-implementer
+    status: pending
+    retries_used: 0
+    acceptance_criteria:
+      - main_unsupervised.py defines app with GET /health and POST /predict per fixed contract
+      - POST /predict scales input with scaler.pkl, predicts with kmeans.pkl, returns cluster int and persona string JSON
+      - uvicorn main_unsupervised:app --port 8000 starts without import error and /health returns ok
+    handoff:
+      constraints:
+        - Must load kmeans.pkl and scaler.pkl via relative path with startup fail-fast if missing
+        - Must not retrain model; inference only
+        - CORS or auth out of scope per YAGNI
+      relevant_context:
+        - Backend port 8000; frontend in T4 calls http://localhost:8000/predict
+        - Request mapping: annual_income -> annual_income_k, spending_score -> spending_score
+  - id: T4-frontend-ui
+    title: Build Streamlit input and scatter UI
+    description: |
+      Author app_unsupervised.py with Streamlit sliders, requests POST to backend, matplotlib 2D scatter. reuse: streamlit + matplotlib + requests installed deps; new: UI wiring and new-customer overlay logic only.
+    wave: 3
+    depends_on: [T2-train-kmeans]
+    agent: gem-implementer
+    status: pending
+    retries_used: 0
+    acceptance_criteria:
+      - app_unsupervised.py renders income/score controls, calls POST http://localhost:8000/predict, displays returned cluster and persona
+      - Shows 2D scatter of customers_clustered.csv clusters plus highlighted new customer point
+      - streamlit run app_unsupervised.py --server.port 8501 starts without import error
+    handoff:
+      constraints:
+        - Must read BACKEND_URL env with default http://localhost:8000; no hardcoded alternate ports
+        - Must handle backend-down with user-visible error, not crash
+        - No extra pages or auth per YAGNI
+      relevant_context:
+        - Depends on T2 artifacts and API contract, parallel-safe with T3
+        - Scatter axes: x annual_income_k, y spending_score, hue cluster
+  - id: T5-verify-e2e
+    title: Verify install train and startup checks
+    description: |
+      Run pip install, dataset, training, and backend/frontend startup checks. reuse: stdlib subprocess/curl + installed deps only; new: none, orchestration of existing scripts.
+    wave: 4
+    depends_on: [T3-backend-api, T4-frontend-ui]
+    agent: gem-implementer
+    status: pending
+    retries_used: 0
+    acceptance_criteria:
+      - pip install -r requirements.txt completes from app folder
+      - python dataset_unsupervised.py and python train_kmeans.py both exit 0 and artifacts present
+      - Backend /health and /predict smoke test returns persona JSON for sample input
+      - Frontend startup check passes and all 5 required files plus customers.csv and .pkl artifacts listed
+    handoff:
+      constraints:
+        - Read-only verification except regenerating artifacts via scripts; do not edit source files to pass
+        - Kill background uvicorn/streamlit processes after check; leave ports 8000/8501 free
+        - Report exact failing command and log tail on failure
+      relevant_context:
+        - Backend port 8000, frontend port 8501
+        - No destructive changes outside customer-segmenter-app
